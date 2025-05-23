@@ -185,5 +185,80 @@ def get_transaction_hex(txid: str):
         print(f"An unexpected error occurred while fetching tx hex for {txid}: {e}")
         return jsonify({"error": "An unexpected error occurred while fetching tx hex", "details": str(e)}), 500
 
+@app.route('/api/blockchain/address/<address>/txs', methods=['GET'])
+def get_address_transactions(address: str):
+    """
+    Fetches transaction history for a given Bitcoin address from Mempool.space API,
+    processes it to determine send/receive relative to the address, and extracts relevant details.
+    """
+    if not address:
+        return jsonify({"error": "Address parameter is required"}), 400
+
+    try:
+        print(f"Fetching transaction history for address: {address} from Mempool.space API")
+        response = requests.get(f"{MEMPOOL_API_URL}/address/{address}/txs")
+        
+        if response.status_code == 400: # Mempool API might return 400 for invalid address format
+            return jsonify({"error": "Invalid Bitcoin address format provided.", "address": address, "details": response.text}), 400
+        response.raise_for_status() # Handles other HTTP errors (e.g., 5xx from API)
+        
+        raw_txs_data = response.json()
+        processed_txs = []
+
+        if not raw_txs_data: # Address exists but has no transactions
+            return jsonify(processed_txs) # Return empty list
+
+        # Fetch current block height once for confirmation calculation
+        height_response = requests.get(f"{MEMPOOL_API_URL}/blocks/tip/height")
+        height_response.raise_for_status()
+        current_block_height = height_response.json()
+
+        for tx in raw_txs_data:
+            total_vin_for_address = 0
+            is_sender = False
+            for vin in tx.get("vin", []):
+                if vin.get("prevout") and vin["prevout"].get("scriptpubkey_address") == address:
+                    total_vin_for_address += vin["prevout"].get("value", 0)
+                    is_sender = True # If any input is from our address, it's a send (or part of complex tx)
+
+            total_vout_for_address = 0
+            for vout in tx.get("vout", []):
+                if vout.get("scriptpubkey_address") == address:
+                    total_vout_for_address += vout.get("value", 0)
+            
+            net_amount_sats = total_vout_for_address - total_vin_for_address
+            tx_type = "receive" if net_amount_sats > 0 else ("send" if net_amount_sats < 0 else "self-transfer/complex")
+            if net_amount_sats == 0 and is_sender: # If net is 0 but our address was an input, likely a send to self or consolidation
+                 tx_type = "send" # Consider it a send for simplicity unless it's purely consolidation with no external output
+
+            confirmations = 0
+            block_time = tx.get("status", {}).get("block_time")
+            if tx.get("status", {}).get("confirmed"):
+                block_height = tx.get("status", {}).get("block_height")
+                if block_height:
+                    confirmations = current_block_height - block_height + 1
+            
+            processed_txs.append({
+                "txid": tx.get("txid"),
+                "type": tx_type,
+                "net_amount_sats": net_amount_sats, # Positive for receive, negative for send
+                "confirmations": confirmations,
+                "timestamp": block_time, # Unix timestamp
+                "fee_sats": tx.get("fee", 0)
+            })
+        
+        return jsonify(processed_txs)
+
+    except requests.exceptions.HTTPError as e:
+        print(f"HTTP error fetching tx history for {address}: {e}. Response: {e.response.text if e.response else 'N/A'}")
+        status_code = e.response.status_code if e.response is not None else 500
+        return jsonify({"error": f"API error fetching transaction history", "address": address, "details": str(e)}), status_code
+    except requests.exceptions.RequestException as e:
+        print(f"Network error fetching tx history for {address}: {e}")
+        return jsonify({"error": "Network error fetching transaction history", "address": address, "details": str(e)}), 503
+    except Exception as e:
+        print(f"An unexpected error occurred while fetching tx history for {address}: {e}")
+        return jsonify({"error": "An unexpected error occurred while fetching transaction history", "details": str(e)}), 500
+
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)

@@ -123,13 +123,15 @@ button:disabled {
 }
 
 #wallet_info_area .info-item, 
-#send_bitcoin_area .action-group { /* Consistent spacing for info items and action groups */
+#send_bitcoin_area .action-group,
+#transaction_history_area .action-group { /* Consistent spacing */
     margin-bottom: 12px;
     padding-bottom: 12px;
     border-bottom: 1px solid #eee; /* Light separator */
 }
 #wallet_info_area .info-item:last-child,
-#send_bitcoin_area .action-group:last-of-type { /* Remove border for last item */
+#send_bitcoin_area .action-group:last-of-type,
+#transaction_history_area .action-group:last-of-type { /* Remove border for last item */
     border-bottom: none;
     padding-bottom: 0;
 }
@@ -187,6 +189,58 @@ button:disabled {
     border-radius: 3px;
     margin-bottom: 10px;
     border: 1px solid #eee;
+}
+
+/* Transaction History Table Styling */
+.table-container {
+    overflow-x: auto; /* Allow horizontal scrolling on small screens */
+    margin-top: 15px;
+}
+
+#tx_history_table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.9em;
+}
+
+#tx_history_table th, #tx_history_table td {
+    border: 1px solid #dee2e6;
+    padding: 8px;
+    text-align: left;
+}
+
+#tx_history_table th {
+    background-color: #e9ecef;
+    font-weight: bold;
+    color: #495057;
+}
+
+#tx_history_table tbody tr:nth-child(odd) {
+    background-color: #f8f9fa;
+}
+
+#tx_history_table tbody tr:hover {
+    background-color: #e2e6ea;
+}
+
+#tx_history_table .sent {
+    color: #dc3545; /* Red for sent amounts/type */
+}
+
+#tx_history_table .received {
+    color: #28a745; /* Green for received amounts/type */
+}
+
+#tx_history_table a {
+    color: #007bff;
+    text-decoration: none;
+}
+#tx_history_table a:hover {
+    text-decoration: underline;
+}
+
+#refresh_history_btn {
+    margin-bottom: 10px;
 }
 
 

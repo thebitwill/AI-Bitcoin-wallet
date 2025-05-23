@@ -24,9 +24,31 @@ document.addEventListener('DOMContentLoaded', () => {
     const recipientAddressInput = document.getElementById('recipient_address');
     const sendAmountInput = document.getElementById('send_amount');
     const feeInfoDisplay = document.getElementById('fee_info');
-    const feeRateInput = document.getElementById('fee_rate');
+    // const feeRateInput = document.getElementById('fee_rate'); // Old direct input, repurposed
     const sendTxBtn = document.getElementById('send_tx_btn');
     const sendStatusMsg = document.getElementById('send_status_msg');
+    const feePrioritySelector = document.getElementById('fee_priority_selector');
+    const customFeeRateGroup = document.getElementById('custom_fee_rate_group');
+    const customFeeRateInput = document.getElementById('custom_fee_rate'); 
+
+    // Transaction History Elements
+    const transactionHistoryArea = document.getElementById('transaction_history_area');
+    const refreshHistoryBtn = document.getElementById('refresh_history_btn');
+    const historyStatusMsg = document.getElementById('history_status_msg');
+    const txHistoryTableBody = document.querySelector('#tx_history_table tbody');
+
+    // Inheritance Planning Elements
+    const inheritancePlanningArea = document.getElementById('inheritance_planning_area');
+    const beneficiaryAddressElem = document.getElementById('beneficiary_address');
+    const inactivityPeriodElem = document.getElementById('intended_inactivity_period');
+    const beneficiaryMessageElem = document.getElementById('beneficiary_message');
+    const saveInheritancePlanBtn = document.getElementById('save_inheritance_plan_btn');
+    const inheritancePlanStatusMsg = document.getElementById('inheritance_plan_status_msg');
+    const prepareInheritancePackageBtn = document.getElementById('prepare_inheritance_package_btn');
+    const inheritancePackageOutputContainer = document.getElementById('inheritance_package_output_container');
+    const inheritancePackageOutput = document.getElementById('inheritance_package_output');
+    const downloadInheritancePackageBtn = document.getElementById('download_inheritance_package_btn');
+
 
     // Ensure bitcoinjs-lib and bip39 are loaded
     if (typeof bitcoin === 'undefined' || typeof bip39 === 'undefined') {
@@ -45,6 +67,13 @@ document.addEventListener('DOMContentLoaded', () => {
     
     const bitcoinNetwork = bitcoin.networks.bitcoin; // Mainnet
     const SATOSHIS_PER_BTC = 100000000;
+    const DUST_THRESHOLD_SATS = 546; 
+    const P2PKH_INPUT_VBSIZE = 148; 
+    const P2PKH_OUTPUT_VBSIZE = 34; 
+    const BASE_TX_VBSIZE_OVERHEAD = 10; 
+
+    window.currentFees = {}; 
+
 
     // --- API Status Fetch ---
     if (statusMessageElement && versionMessageElement) {
@@ -70,7 +99,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             const seed = bip39.mnemonicToSeedSync(mnemonic);
             const root = bitcoin.bip32.fromSeed(seed, bitcoinNetwork);
-            const path = "m/44'/0'/0'/0/0"; // P2PKH path
+            const path = "m/44'/0'/0'/0/0"; 
             const child = root.derivePath(path);
             const { address } = bitcoin.payments.p2pkh({ pubkey: child.publicKey, network: bitcoinNetwork });
 
@@ -78,7 +107,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 return { error: "Could not derive address from mnemonic." };
             }
             const privateKeyWif = child.toWIF();
-            // Storing the ECPair object derived from WIF for signing
             const keyPair = bitcoin.ECPair.fromWIF(privateKeyWif, bitcoinNetwork);
             return { mnemonic, address, privateKeyWif, keyPair: keyPair };
         } catch (e) {
@@ -90,8 +118,9 @@ document.addEventListener('DOMContentLoaded', () => {
     function display_wallet_info(details) {
         if (details.error) {
             if (importErrorMsg) importErrorMsg.textContent = details.error;
-            if (walletInfoArea) walletInfoArea.classList.add('hidden');
-            if (sendBitcoinArea) sendBitcoinArea.classList.add('hidden');
+            [walletInfoArea, sendBitcoinArea, transactionHistoryArea, inheritancePlanningArea].forEach(area => {
+                if (area) area.classList.add('hidden');
+            });
             return;
         }
         if (importErrorMsg) importErrorMsg.textContent = ''; 
@@ -103,10 +132,11 @@ document.addEventListener('DOMContentLoaded', () => {
             fetch_and_display_balance(details.address);
         }
         
-        window.currentWallet = details; // Store current wallet globally
+        window.currentWallet = details; 
 
-        if (walletInfoArea) walletInfoArea.classList.remove('hidden');
-        if (sendBitcoinArea) sendBitcoinArea.classList.remove('hidden');
+        [walletInfoArea, sendBitcoinArea, transactionHistoryArea, inheritancePlanningArea].forEach(area => {
+            if (area) area.classList.remove('hidden');
+        });
 
         if (qrCodeContainer && typeof QRCode !== 'undefined' && details.address) {
             qrCodeContainer.innerHTML = ""; 
@@ -116,6 +146,8 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         }
         fetch_and_display_fees(); 
+        fetch_and_display_tx_history(details.address);
+        load_inheritance_plan(); 
     }
 
     async function fetch_and_display_balance(address) {
@@ -136,6 +168,351 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    async function fetch_and_display_tx_history(walletAddress) {
+        if (!txHistoryTableBody || !historyStatusMsg) { return; }
+        historyStatusMsg.textContent = "Loading transaction history...";
+        historyStatusMsg.className = 'message';
+        txHistoryTableBody.innerHTML = ''; 
+
+        try {
+            const response = await fetch(`/api/blockchain/address/${walletAddress}/txs`);
+            if (!response.ok) {
+                const errData = await response.json().catch(() => ({error: {details: response.statusText}}));
+                throw new Error(errData.error.details || `HTTP error! status: ${response.status}`);
+            }
+            const txs = await response.json();
+            if (txs.error) { throw new Error(txs.error.details || txs.error); }
+            if (txs.length === 0) {
+                historyStatusMsg.textContent = "No transactions found for this address.";
+                const row = txHistoryTableBody.insertRow();
+                const cell = row.insertCell();
+                cell.colSpan = 6; cell.textContent = "No transactions yet."; cell.style.textAlign = "center";
+                return;
+            }
+            txs.forEach(tx => {
+                const row = txHistoryTableBody.insertRow();
+                row.insertCell().textContent = tx.timestamp ? new Date(tx.timestamp * 1000).toLocaleString() : 'Unconfirmed';
+                const typeCell = row.insertCell();
+                typeCell.textContent = tx.type.charAt(0).toUpperCase() + tx.type.slice(1);
+                typeCell.className = tx.type === 'send' ? 'sent' : 'received';
+                const amountCell = row.insertCell();
+                amountCell.textContent = `${(tx.net_amount_sats / SATOSHIS_PER_BTC).toFixed(8)}`;
+                amountCell.className = tx.type === 'send' ? 'sent' : 'received';
+                row.insertCell().textContent = tx.fee_sats;
+                row.insertCell().textContent = tx.confirmations > 6 ? "6+" : tx.confirmations.toString();
+                const txidCell = row.insertCell();
+                const txidLink = document.createElement('a');
+                txidLink.href = `https://mempool.space/tx/${tx.txid}`; 
+                txidLink.textContent = `${tx.txid.substring(0, 10)}...${tx.txid.substring(tx.txid.length - 10)}`;
+                txidLink.target = "_blank"; txidLink.title = tx.txid; 
+                txidCell.appendChild(txidLink);
+            });
+            historyStatusMsg.textContent = "Transaction history updated.";
+            historyStatusMsg.classList.add('success');
+        } catch (error) {
+            console.error('Error fetching transaction history:', error);
+            historyStatusMsg.textContent = `Failed to load history: ${error.message}`;
+            historyStatusMsg.classList.add('error');
+        }
+    }
+    
+    if (refreshHistoryBtn) {
+        refreshHistoryBtn.addEventListener('click', () => {
+            if (window.currentWallet && window.currentWallet.address) {
+                fetch_and_display_tx_history(window.currentWallet.address);
+            } else {
+                if (historyStatusMsg) {
+                     historyStatusMsg.textContent = "Please create or import a wallet first to view history.";
+                     historyStatusMsg.className = 'message error';
+                }
+            }
+        });
+    }
+
+    if (feePrioritySelector) {
+        feePrioritySelector.addEventListener('change', (event) => {
+            if (event.target.name === 'fee_priority') {
+                customFeeRateGroup.classList.toggle('hidden', event.target.value !== 'custom');
+                if (event.target.value === 'custom' && customFeeRateInput) {
+                    customFeeRateInput.value = window.currentFees?.halfHourFee || ''; 
+                }
+            }
+        });
+    }
+    
+    function fetch_and_display_fees() { 
+        if (!feeInfoDisplay) { return; }
+        feeInfoDisplay.textContent = "Fetching fee estimates...";
+        fetch('/api/network-fees')
+            .then(response => {
+                if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+                return response.json();
+            })
+            .then(fees => {
+                if (fees.error) throw new Error(fees.error.details || fees.error);
+                window.currentFees = fees; 
+                if(document.getElementById('fastestFee_val')) document.getElementById('fastestFee_val').textContent = fees.fastestFee;
+                if(document.getElementById('halfHourFee_val')) document.getElementById('halfHourFee_val').textContent = fees.halfHourFee;
+                if(document.getElementById('hourFee_val')) document.getElementById('hourFee_val').textContent = fees.hourFee;
+                const mediumFeeRadio = document.getElementById('fee_priority_medium');
+                if (mediumFeeRadio) mediumFeeRadio.checked = true;
+                customFeeRateGroup.classList.add('hidden'); 
+                feeInfoDisplay.textContent = "Select a fee priority or enter custom rate:";
+            })
+            .catch(error => {
+                console.error('Error fetching network fees:', error);
+                feeInfoDisplay.textContent = `Failed to fetch fees: ${error.message}`;
+                window.currentFees = {}; 
+            });
+    }
+
+    function estimate_tx_vbytes(num_inputs, num_outputs) {
+        return (num_inputs * P2PKH_INPUT_VBSIZE) + (num_outputs * P2PKH_OUTPUT_VBSIZE) + BASE_TX_VBSIZE_OVERHEAD;
+    }
+
+    function select_coins(utxos, target_amount_sats, fee_rate_sats_per_vb, num_outputs_for_fee_calc = 2) {
+        if (!utxos || utxos.length === 0) {
+            return { error: "No UTXOs provided for coin selection." };
+        }
+        let selected_utxos = [];
+        let total_selected_value_sats = 0;
+        const sorted_utxos_asc = [...utxos].sort((a, b) => a.value - b.value);
+        const sorted_utxos_desc = [...utxos].sort((a, b) => b.value - a.value);
+
+        for (const utxo of sorted_utxos_desc) {
+            const fee_for_one_input = estimate_tx_vbytes(1, num_outputs_for_fee_calc) * fee_rate_sats_per_vb;
+            if (utxo.value >= target_amount_sats + fee_for_one_input) {
+                return {
+                    selected_utxos: [utxo],
+                    total_selected_value_sats: utxo.value,
+                    final_estimated_fee_sats: fee_for_one_input 
+                };
+            }
+        }
+        for (const utxo of sorted_utxos_asc) {
+            selected_utxos.push(utxo);
+            total_selected_value_sats += utxo.value;
+            const current_estimated_fee = estimate_tx_vbytes(selected_utxos.length, num_outputs_for_fee_calc) * fee_rate_sats_per_vb;
+            if (total_selected_value_sats >= target_amount_sats + current_estimated_fee) {
+                return {
+                    selected_utxos: selected_utxos,
+                    total_selected_value_sats: total_selected_value_sats,
+                    final_estimated_fee_sats: current_estimated_fee
+                };
+            }
+        }
+        return { error: "Insufficient confirmed funds to cover amount and transaction fee." };
+    }
+
+    if (sendTxBtn) {
+        sendTxBtn.addEventListener('click', async () => {
+            sendStatusMsg.textContent = ''; 
+            sendStatusMsg.className = 'message'; 
+            if (!window.currentWallet || !window.currentWallet.address || !window.currentWallet.keyPair) {
+                sendStatusMsg.textContent = "Error: Wallet not loaded or keyPair missing.";
+                sendStatusMsg.classList.add('error'); return;
+            }
+
+            const recipient_address_trimmed = recipientAddressInput.value.trim();
+            // **New Validation Logic Start**
+            if (!recipient_address_trimmed) { 
+                sendStatusMsg.textContent = "Recipient address cannot be empty."; 
+                sendStatusMsg.classList.add('error'); return;
+            }
+            try {
+                bitcoin.address.toOutputScript(recipient_address_trimmed, bitcoin.networks.bitcoin);
+                // If valid, clear previous address-specific error, but keep other potential messages
+                if (sendStatusMsg.textContent.includes("Invalid Bitcoin address format")) {
+                    sendStatusMsg.textContent = ''; // Clear only if it was an address error
+                    sendStatusMsg.className = 'message';
+                }
+            } catch (e) {
+                console.error("Address validation error:", e);
+                sendStatusMsg.textContent = 'Invalid Bitcoin address format. Please check the address and try again.';
+                sendStatusMsg.classList.add('error'); return;
+            }
+            // **New Validation Logic End**
+            
+            const amountBTCStr = sendAmountInput.value.trim();
+            if (!amountBTCStr) { sendStatusMsg.textContent = "Amount is required."; sendStatusMsg.classList.add('error'); return; }
+            let amountSats;
+            try {
+                const amountBTC = parseFloat(amountBTCStr);
+                if (isNaN(amountBTC) || amountBTC <= 0) throw new Error("Amount must be positive and numeric.");
+                amountSats = Math.round(amountBTC * SATOSHIS_PER_BTC);
+                if (amountSats < DUST_THRESHOLD_SATS) { 
+                    throw new Error(`Amount is too small (less than dust threshold of ${DUST_THRESHOLD_SATS} sats).`);
+                }
+            } catch(e) { sendStatusMsg.textContent = "Invalid amount: " + e.message; sendStatusMsg.classList.add('error'); return; }
+
+            let actual_fee_rate_sats_per_vb;
+            const selected_priority_radio = document.querySelector('input[name="fee_priority"]:checked');
+            if (!selected_priority_radio) {
+                sendStatusMsg.textContent = "Please select a fee priority."; sendStatusMsg.classList.add('error'); return;
+            }
+            const fee_priority_value = selected_priority_radio.value;
+
+            if (fee_priority_value === 'custom') {
+                const customRateStr = customFeeRateInput.value.trim();
+                if (!customRateStr) { sendStatusMsg.textContent = "Custom fee rate is required."; sendStatusMsg.classList.add('error'); return; }
+                actual_fee_rate_sats_per_vb = parseInt(customRateStr, 10);
+                if (isNaN(actual_fee_rate_sats_per_vb) || actual_fee_rate_sats_per_vb <= 0) {
+                    sendStatusMsg.textContent = "Invalid custom fee rate."; sendStatusMsg.classList.add('error'); return;
+                }
+            } else {
+                actual_fee_rate_sats_per_vb = window.currentFees ? window.currentFees[fee_priority_value] : null;
+                if (!actual_fee_rate_sats_per_vb) {
+                    sendStatusMsg.textContent = "Selected fee priority data not available. Try refreshing fees or select custom.";
+                    sendStatusMsg.classList.add('error'); return;
+                }
+            }
+            
+            sendStatusMsg.textContent = "Processing transaction...";
+            sendTxBtn.disabled = true;
+
+            try {
+                const utxoResponse = await fetch(`/api/blockchain/address/${window.currentWallet.address}/utxos`);
+                if (!utxoResponse.ok) throw new Error(`Failed to fetch UTXOs: ${utxoResponse.statusText} (${utxoResponse.status})`);
+                const availableUtxosApi = await utxoResponse.json();
+                if (availableUtxosApi.error) throw new Error(`UTXO API Error: ${availableUtxosApi.error.details || availableUtxosApi.error}`);
+                const confirmedUtxos = availableUtxosApi.filter(utxo => utxo.confirmed);
+                if (confirmedUtxos.length === 0) throw new Error("No confirmed UTXOs available.");
+                
+                const num_outputs_for_fee_est = 2; 
+                const coinSelectionResult = select_coins(confirmedUtxos, amountSats, actual_fee_rate_sats_per_vb, num_outputs_for_fee_est);
+                if (coinSelectionResult.error) throw new Error(coinSelectionResult.error);
+                
+                let { selected_utxos, total_selected_value_sats, final_estimated_fee_sats } = coinSelectionResult;
+
+                const inputsToSignDetails = [];
+                for (const utxo of selected_utxos) {
+                    const txHexResponse = await fetch(`/api/blockchain/tx/${utxo.txid}/hex`);
+                    if (!txHexResponse.ok) {
+                        const errText = await txHexResponse.text();
+                        throw new Error(`Failed to fetch raw tx hex for ${utxo.txid}: ${errText} (Status: ${txHexResponse.status})`);
+                    }
+                    const rawTxHex = await txHexResponse.text();
+                    if (!rawTxHex || !/^[0-9a-fA-F]+$/.test(rawTxHex) || rawTxHex.length % 2 !== 0) {
+                        throw new Error(`Invalid or empty raw tx hex for ${utxo.txid}.`);
+                    }
+                    inputsToSignDetails.push({ hash: utxo.txid, index: utxo.vout, nonWitnessUtxo: Buffer.from(rawTxHex, 'hex') });
+                }
+                
+                const psbt = new bitcoin.Psbt({ network: bitcoinNetwork });
+                inputsToSignDetails.forEach(inputDetail => psbt.addInput(inputDetail));
+                
+                psbt.addOutput({ address: recipient_address_trimmed, value: amountSats });
+                
+                const potential_change_sats = total_selected_value_sats - amountSats - final_estimated_fee_sats;
+                if (potential_change_sats >= DUST_THRESHOLD_SATS) {
+                    psbt.addOutput({ address: window.currentWallet.address, value: potential_change_sats });
+                }
+
+                const keyPair = window.currentWallet.keyPair;
+                inputsToSignDetails.forEach((_, index) => psbt.signInput(index, keyPair));
+                
+                psbt.finalizeAllInputs();
+                const txHex = psbt.extractTransaction().toHex();
+
+                sendStatusMsg.textContent = "Broadcasting transaction...";
+                const broadcastResponse = await fetch('/api/broadcast-tx', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ rawTxHex: txHex }),
+                });
+                const broadcastResult = await broadcastResponse.json();
+
+                if (!broadcastResponse.ok || broadcastResult.error) {
+                    throw new Error(`Broadcast failed: ${broadcastResult.error?.details || broadcastResult.error || broadcastResponse.statusText}`);
+                }
+
+                sendStatusMsg.textContent = `Transaction broadcasted successfully! TXID: ${broadcastResult.txid}`;
+                sendStatusMsg.classList.remove('error'); sendStatusMsg.classList.add('success');
+                
+                recipientAddressInput.value = ''; sendAmountInput.value = '';
+                setTimeout(() => {
+                    fetch_and_display_balance(window.currentWallet.address);
+                    fetch_and_display_tx_history(window.currentWallet.address);
+                }, 2000);
+
+            } catch (error) {
+                console.error("Transaction error:", error);
+                sendStatusMsg.textContent = `Error: ${error.message}`;
+                sendStatusMsg.classList.add('error');
+            } finally {
+                sendTxBtn.disabled = false;
+            }
+        });
+    }
+
+    // --- Inheritance Planning Logic ---
+    const inheritancePlanningArea = document.getElementById('inheritance_planning_area');
+    const beneficiaryAddressElem = document.getElementById('beneficiary_address');
+    const inactivityPeriodElem = document.getElementById('intended_inactivity_period');
+    const beneficiaryMessageElem = document.getElementById('beneficiary_message');
+    const saveInheritancePlanBtn = document.getElementById('save_inheritance_plan_btn');
+    const inheritancePlanStatusMsg = document.getElementById('inheritance_plan_status_msg');
+    const prepareInheritancePackageBtn = document.getElementById('prepare_inheritance_package_btn');
+    const inheritancePackageOutputContainer = document.getElementById('inheritance_package_output_container');
+    const inheritancePackageOutput = document.getElementById('inheritance_package_output');
+    const downloadInheritancePackageBtn = document.getElementById('download_inheritance_package_btn');
+
+    function get_inheritance_plan_storage_key() {
+        if (window.currentWallet && window.currentWallet.address) {
+            return `inheritance_plan_${window.currentWallet.address}`;
+        }
+        return null;
+    }
+
+    function save_inheritance_plan() {
+        if (!window.currentWallet) {
+            inheritancePlanStatusMsg.textContent = "Wallet not loaded.";
+            inheritancePlanStatusMsg.className = 'message error';
+            return;
+        }
+        const storageKey = get_inheritance_plan_storage_key();
+        if (!storageKey) return;
+
+        const plan = {
+            beneficiaryAddress: beneficiaryAddressElem.value.trim(),
+            inactivityPeriod: inactivityPeriodElem.value.trim(),
+            message: beneficiaryMessageElem.value.trim(),
+        };
+
+        if (plan.beneficiaryAddress) {
+            try {
+                bitcoin.address.toOutputScript(plan.beneficiaryAddress, bitcoinNetwork);
+            } catch (e) {
+                inheritancePlanStatusMsg.textContent = "Invalid beneficiary Bitcoin address.";
+                inheritancePlanStatusMsg.className = 'message error';
+                return;
+            }
+        }
+
+        localStorage.setItem(storageKey, JSON.stringify(plan));
+        inheritancePlanStatusMsg.textContent = "Inheritance plan saved locally.";
+        inheritancePlanStatusMsg.className = 'message success';
+    }
+
+    function load_inheritance_plan() {
+        if (!window.currentWallet || !inheritancePlanningArea) return; 
+        const storageKey = get_inheritance_plan_storage_key();
+        if (!storageKey) return;
+
+        const savedPlan = localStorage.getItem(storageKey);
+        if (savedPlan) {
+            const plan = JSON.parse(savedPlan);
+            beneficiaryAddressElem.value = plan.beneficiaryAddress || '';
+            inactivityPeriodElem.value = plan.inactivityPeriod || '';
+            beneficiaryMessageElem.value = plan.message || '';
+        } else { 
+            beneficiaryAddressElem.value = '';
+            inactivityPeriodElem.value = '';
+            beneficiaryMessageElem.value = '';
+        }
+        // inheritancePlanningArea.classList.remove('hidden'); // Already handled in display_wallet_info
+    }
+    
+    // --- Event Listeners & Initial Calls (Create, Import, Copy, Send, Inheritance) ---
     if (createWalletBtn) {
         createWalletBtn.addEventListener('click', () => {
             const newMnemonic = bip39.generateMnemonic(); 
@@ -159,195 +536,94 @@ document.addEventListener('DOMContentLoaded', () => {
             display_wallet_info(details);
         });
     }
-
-    async function copyToClipboard(textToCopy, buttonElement, originalText) {
-        if (!navigator.clipboard) {
-            alert("Clipboard API not available. Please copy manually.");
-            return;
-        }
-        try {
-            await navigator.clipboard.writeText(textToCopy);
-            if (buttonElement) {
-                buttonElement.textContent = 'Copied!';
-                setTimeout(() => { buttonElement.textContent = originalText; }, 2000);
-            }
-        } catch (err) {
-            console.error('Failed to copy: ', err);
-            alert("Failed to copy text. Please try again or copy manually.");
-        }
+    if (saveInheritancePlanBtn) {
+        saveInheritancePlanBtn.addEventListener('click', save_inheritance_plan);
     }
 
-    if (copyMnemonicBtn && mnemonicDisplay) { 
-        copyMnemonicBtn.addEventListener('click', () => {
-            copyToClipboard(mnemonicDisplay.textContent, copyMnemonicBtn, "Copy");
-        });
-    }
-    if (copyAddressBtn && walletAddressDisplay) { 
-        copyAddressBtn.addEventListener('click', () => {
-            copyToClipboard(walletAddressDisplay.textContent, copyAddressBtn, "Copy");
-        });
-    }
-
-    function fetch_and_display_fees() {
-        if (!feeInfoDisplay || !feeRateInput) { return; }
-        feeInfoDisplay.textContent = "Fetching fee estimates...";
-        fetch('/api/network-fees')
-            .then(response => {
-                if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-                return response.json();
-            })
-            .then(fees => {
-                if (fees.error) throw new Error(fees.error.details || fees.error);
-                feeInfoDisplay.innerHTML = `Fastest: ${fees.fastestFee} sat/vB<br>Medium (30m): ${fees.halfHourFee} sat/vB<br>Slow (1hr): ${fees.hourFee} sat/vB`;
-                feeRateInput.value = fees.halfHourFee || '';
-            })
-            .catch(error => {
-                console.error('Error fetching network fees:', error);
-                feeInfoDisplay.textContent = `Failed to fetch fees: ${error.message}`;
-                feeRateInput.value = '';
-            });
-    }
-
-    if (sendTxBtn) {
-        sendTxBtn.addEventListener('click', async () => {
-            sendStatusMsg.textContent = ''; 
-            sendStatusMsg.className = 'message'; // Reset class name
-            if (!window.currentWallet || !window.currentWallet.address || !window.currentWallet.keyPair) {
-                sendStatusMsg.textContent = "Error: Wallet not loaded or keyPair missing.";
-                sendStatusMsg.classList.add('error');
+    if (prepareInheritancePackageBtn) {
+        prepareInheritancePackageBtn.addEventListener('click', () => {
+            if (!window.currentWallet || !window.currentWallet.mnemonic) {
+                inheritancePackageOutput.textContent = "Wallet not loaded or mnemonic is unavailable.";
+                inheritancePackageOutputContainer.classList.remove('hidden');
                 return;
             }
+            
+            const planData = JSON.parse(localStorage.getItem(get_inheritance_plan_storage_key())) || {};
+            const packageText = `
+    --- BITCOIN WALLET INHERITANCE INFORMATION ---
 
-            const recipient = recipientAddressInput.value.trim();
-            const amountBTCStr = sendAmountInput.value.trim();
-            const feeRateStr = feeRateInput.value.trim();
+    Date Prepared: ${new Date().toLocaleString()}
 
-            // 1. Validate Inputs
-            if (!recipient) { sendStatusMsg.textContent = "Recipient address is required."; sendStatusMsg.classList.add('error'); return; }
-            try { bitcoin.address.toOutputScript(recipient, bitcoinNetwork); } 
-            catch (e) { sendStatusMsg.textContent = `Invalid recipient address: ${e.message}`; sendStatusMsg.classList.add('error'); return; }
+    IMPORTANT: This document contains sensitive information. Store it securely 
+    and share it only with your trusted beneficiary through a secure method. 
+    This information is intended to help your beneficiary access your Bitcoin
+    wallet in the event of your prolonged inactivity or incapacitation.
 
-            if (!amountBTCStr) { sendStatusMsg.textContent = "Amount is required."; sendStatusMsg.classList.add('error'); return; }
-            let amountSats;
-            try {
-                const amountBTC = parseFloat(amountBTCStr);
-                if (isNaN(amountBTC) || amountBTC <= 0) throw new Error("Amount must be positive.");
-                amountSats = Math.round(amountBTC * SATOSHIS_PER_BTC);
-            } catch(e) { sendStatusMsg.textContent = "Invalid amount: " + e.message; sendStatusMsg.classList.add('error'); return; }
+    Wallet Mnemonic (Recovery Phrase):
+    ${window.currentWallet.mnemonic}
 
+    Wallet Primary Address (for reference):
+    ${window.currentWallet.address}
+    
+    Private Key (WIF - Wallet Import Format - VERY SENSITIVE):
+    ${window.currentWallet.privateKeyWif} 
 
-            if (!feeRateStr) { sendStatusMsg.textContent = "Fee rate is required."; sendStatusMsg.classList.add('error'); return; }
-            const feeRate = parseInt(feeRateStr, 10);
-            if (isNaN(feeRate) || feeRate <= 0) { sendStatusMsg.textContent = "Invalid fee rate. Must be a positive integer."; sendStatusMsg.classList.add('error'); return; }
+    --- Beneficiary Information & Instructions ---
 
-            sendStatusMsg.textContent = "Processing transaction...";
-            sendTxBtn.disabled = true;
+    Intended Beneficiary Bitcoin Address:
+    ${planData.beneficiaryAddress || "Not specified"}
 
-            try {
-                // 2. Fetch UTXOs
-                const utxoResponse = await fetch(`/api/blockchain/address/${window.currentWallet.address}/utxos`);
-                if (!utxoResponse.ok) throw new Error(`Failed to fetch UTXOs: ${utxoResponse.statusText} (${utxoResponse.status})`);
-                const availableUtxosApi = await utxoResponse.json();
-                if (availableUtxosApi.error) throw new Error(`UTXO API Error: ${availableUtxosApi.error.details || availableUtxosApi.error}`);
-                
-                const confirmedUtxos = availableUtxosApi.filter(utxo => utxo.confirmed);
-                if (confirmedUtxos.length === 0) throw new Error("No confirmed UTXOs available to spend.");
+    Intended Inactivity Period Before Access:
+    ${planData.inactivityPeriod || "Not specified"}
 
-                // 3. Coin Selection & Fee Calculation (Simplified)
-                const psbt = new bitcoin.Psbt({ network: bitcoinNetwork });
-                let totalInputSats = 0;
-                const inputsToSignDetails = []; 
-                
-                // Fetch raw hex for each UTXO to be used (for nonWitnessUtxo as we are using P2PKH)
-                for (const utxo of confirmedUtxos) {
-                    const txHexResponse = await fetch(`/api/blockchain/tx/${utxo.txid}/hex`);
-                    if (!txHexResponse.ok) {
-                        const errText = await txHexResponse.text(); // Get error text from plain text response
-                        throw new Error(`Failed to fetch raw tx hex for ${utxo.txid}: ${errText} (Status: ${txHexResponse.status})`);
-                    }
-                    const rawTxHex = await txHexResponse.text();
-                     // Basic validation for hex string
-                    if (!rawTxHex || !/^[0-9a-fA-F]+$/.test(rawTxHex) || rawTxHex.length % 2 !== 0) {
-                         throw new Error(`Invalid or empty raw tx hex for ${utxo.txid}. Received: ${rawTxHex.substring(0,100)}...`);
-                    }
-                    
-                    inputsToSignDetails.push({ 
-                        hash: utxo.txid,
-                        index: utxo.vout,
-                        value: utxo.value, // value in satoshis
-                        nonWitnessUtxo: Buffer.from(rawTxHex, 'hex'),
-                    });
-                    totalInputSats += utxo.value;
-                    // Naive coin selection: add inputs until amount is covered (fee not yet considered here)
-                    // A more robust fee estimation would happen *before* selecting all inputs, or iteratively.
-                    if (totalInputSats >= amountSats) break; 
-                }
-                
-                if (totalInputSats < amountSats) throw new Error("Insufficient funds to cover amount (before fees).");
+    Your Message & Instructions:
+    ${planData.message || "No specific message provided."}
 
-                // Estimate fee (P2PKH: ~148 bytes/input, ~34 bytes/output, +10 bytes overhead)
-                // This is a very rough estimation.
-                const numInputs = inputsToSignDetails.length;
-                const numOutputs = 2; // One for recipient, one for potential change
-                const estimatedTxVBytes = (numInputs * 148) + (numOutputs * 34) + 10; 
-                const estimatedFeeSats = estimatedTxVBytes * feeRate;
+    --- How to Use This Information ---
+    1.  Understand Bitcoin: The beneficiary should have a basic understanding of Bitcoin 
+        and how to use a Bitcoin wallet. Many online resources are available.
+    2.  Import the Wallet: Use the Mnemonic (Recovery Phrase) above to import this wallet 
+        into a compatible Bitcoin wallet software (e.g., Electrum, BlueWallet, or this web wallet).
+        The Private Key (WIF) can also be used for import in some wallets but is less common for full wallet recovery.
+    3.  Access Funds: Once imported, the beneficiary will have control over the funds 
+        associated with this wallet.
+    4.  Consider Security: Advise the beneficiary to move the funds to their own secure wallet 
+        once they have access, especially if this document's security could be compromised.
 
-                if (totalInputSats < amountSats + estimatedFeeSats) {
-                    throw new Error(`Insufficient funds. Need approx. ${((amountSats + estimatedFeeSats) / SATOSHIS_PER_BTC).toFixed(8)} BTC (incl. estimated fee ${estimatedFeeSats} sats), have ${(totalInputSats / SATOSHIS_PER_BTC).toFixed(8)} BTC.`);
-                }
-                
-                // Add inputs to PSBT
-                inputsToSignDetails.forEach(inputDetail => {
-                    psbt.addInput(inputDetail); // inputDetail already contains nonWitnessUtxo
-                });
-                
-                // Add outputs
-                psbt.addOutput({ address: recipient, value: amountSats });
-                const DUST_THRESHOLD = 546; // Min value for P2PKH output to be non-dust
-                const changeAmountSats = totalInputSats - amountSats - estimatedFeeSats;
-                if (changeAmountSats >= DUST_THRESHOLD) {
-                    psbt.addOutput({ address: window.currentWallet.address, value: changeAmountSats });
-                }
-                // If change is dust, it effectively becomes part of the fee (not explicitly added to fee, just not returned).
-
-                // Sign Transaction
-                const keyPair = window.currentWallet.keyPair; // ECPair object stored in derive_wallet_details
-                inputsToSignDetails.forEach((_, index) => { // Sign each input
-                    psbt.signInput(index, keyPair);
-                });
-                
-                // Finalize Transaction
-                psbt.finalizeAllInputs(); // Validate all inputs are signed
-                const txHex = psbt.extractTransaction().toHex();
-
-                // Broadcast via Backend
-                sendStatusMsg.textContent = "Broadcasting transaction...";
-                const broadcastResponse = await fetch('/api/broadcast-tx', {
-                    method: 'POST', headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ rawTxHex: txHex }),
-                });
-                const broadcastResult = await broadcastResponse.json(); // Expecting JSON from our backend
-
-                if (!broadcastResponse.ok || broadcastResult.error) { // Check our backend's error structure
-                    throw new Error(`Broadcast failed: ${broadcastResult.error?.details || broadcastResult.error || broadcastResponse.statusText}`);
-                }
-
-                sendStatusMsg.textContent = `Transaction broadcasted successfully! TXID: ${broadcastResult.txid}`;
-                sendStatusMsg.classList.remove('error'); sendStatusMsg.classList.add('success');
-                
-                // Clear form and update balance
-                recipientAddressInput.value = ''; 
-                sendAmountInput.value = '';
-                // Consider not clearing feeRateInput if user wants to make another tx with same rate
-                setTimeout(() => fetch_and_display_balance(window.currentWallet.address), 2000); // Delay to allow mempool update
-
-            } catch (error) {
-                console.error("Transaction error:", error);
-                sendStatusMsg.textContent = `Error: ${error.message}`;
-                sendStatusMsg.classList.add('error');
-            } finally {
-                sendTxBtn.disabled = false; // Re-enable send button
-            }
+    --- Disclaimer ---
+    This information is provided as-is. The creator of this package is responsible for 
+    its accuracy and secure handling. This web wallet provides this tool as a utility 
+    and holds no responsibility for the management, security, or distribution of this package.
+    It is strongly recommended to consult with legal and financial professionals for 
+    comprehensive estate planning.
+            `;
+            inheritancePackageOutput.textContent = packageText.trim();
+            inheritancePackageOutputContainer.classList.remove('hidden');
         });
     }
+
+    if (downloadInheritancePackageBtn) {
+        downloadInheritancePackageBtn.addEventListener('click', () => {
+            const text = inheritancePackageOutput.textContent;
+            let filename = "bitcoin_wallet_inheritance_info.txt";
+            if (window.currentWallet && window.currentWallet.address) {
+                 filename = `bitcoin_wallet_inheritance_info_${window.currentWallet.address.substring(0,8)}.txt`;
+            }
+            const element = document.createElement('a');
+            element.setAttribute('href', 'data:text/plain;charset=utf-8,' + encodeURIComponent(text));
+            element.setAttribute('download', filename);
+            element.style.display = 'none';
+            document.body.appendChild(element);
+            element.click();
+            document.body.removeChild(element);
+        });
+    }
+    
+    // Initial UI setup: Hide sections that require a wallet
+    if (walletInfoArea) walletInfoArea.classList.add('hidden');
+    if (sendBitcoinArea) sendBitcoinArea.classList.add('hidden');
+    if (transactionHistoryArea) transactionHistoryArea.classList.add('hidden');
+    if (inheritancePlanningArea) inheritancePlanningArea.classList.add('hidden');
+    if (customFeeRateGroup) customFeeRateGroup.classList.add('hidden'); 
+
 });

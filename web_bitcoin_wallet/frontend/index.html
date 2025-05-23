@@ -67,15 +67,85 @@
                 <input type="text" id="send_amount" placeholder="e.g., 0.001">
             </div>
             <div class="action-group">
-                <label>Network Fees:</label>
+                <label>Network Fees (Recommended):</label>
                 <div id="fee_info">Loading fees...</div>
             </div>
             <div class="action-group">
-                <label for="fee_rate">Fee Rate (sat/vB):</label>
-                <input type="text" id="fee_rate" placeholder="e.g., 20">
+                <label>Fee Priority:</label>
+                <div id="fee_priority_selector" class="fee-options">
+                    <input type="radio" id="fee_priority_high" name="fee_priority" value="fastestFee" checked>
+                    <label for="fee_priority_high">High (<span id="fastestFee_val">...</span> sat/vB)</label><br>
+                    <input type="radio" id="fee_priority_medium" name="fee_priority" value="halfHourFee">
+                    <label for="fee_priority_medium">Medium (<span id="halfHourFee_val">...</span> sat/vB)</label><br>
+                    <input type="radio" id="fee_priority_low" name="fee_priority" value="hourFee">
+                    <label for="fee_priority_low">Low (<span id="hourFee_val">...</span> sat/vB)</label><br>
+                    <input type="radio" id="fee_priority_custom" name="fee_priority" value="custom">
+                    <label for="fee_priority_custom">Custom</label>
+                </div>
             </div>
+            <div class="action-group hidden" id="custom_fee_rate_group">
+                <label for="custom_fee_rate">Custom Fee Rate (sat/vB):</label>
+                <input type="text" id="custom_fee_rate" placeholder="e.g., 20">
+            </div>
+            <input type="hidden" id="fee_rate"> <!-- Old field, keep hidden for now or remove if fully unused -->
+
             <button id="send_tx_btn">Send Transaction</button>
-            <p id="send_status_msg" class="message"></p> <!-- For status/error messages -->
+            <p id="send_status_msg" class="message"></p> 
+        </section>
+
+        <section id="transaction_history_area" class="hidden">
+            <h2>Transaction History</h2>
+            <button id="refresh_history_btn">Refresh History</button>
+            <p id="history_status_msg" class="message"></p>
+            <div class="table-container">
+                <table id="tx_history_table">
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>Type</th>
+                            <th>Net Amount (sats)</th>
+                            <th>Fee (sats)</th>
+                            <th>Confirmations</th>
+                            <th>TXID</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <!-- Transaction rows will be inserted here by JavaScript -->
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <section id="inheritance_planning_area" class="hidden">
+            <h2>Inheritance Planning</h2>
+            <p class="feature-description">
+                This feature helps you prepare information for a beneficiary. It does **not** automate any
+                transfer of funds. The information generated should be stored securely and shared with your
+                trusted beneficiary according to your own estate planning.
+            </p>
+            <div class="action-group">
+                <label for="beneficiary_address">Beneficiary Bitcoin Address:</label>
+                <input type="text" id="beneficiary_address" placeholder="Enter beneficiary's Bitcoin address">
+            </div>
+            <div class="action-group">
+                <label for="intended_inactivity_period">Intended Inactivity Period (e.g., 1 year):</label>
+                <input type="text" id="intended_inactivity_period" placeholder="e.g., 1 year, 6 months">
+            </div>
+            <div class="action-group">
+                <label for="beneficiary_message">Message/Instructions for Beneficiary:</label>
+                <textarea id="beneficiary_message" rows="4" placeholder="Enter any special instructions or messages for your beneficiary."></textarea>
+            </div>
+            <button id="save_inheritance_plan_btn">Save Inheritance Plan</button>
+            <p id="inheritance_plan_status_msg" class="message"></p>
+            
+            <hr class="section-hr">
+
+            <button id="prepare_inheritance_package_btn">Prepare Inheritance Information Package</button>
+            <div id="inheritance_package_output_container" class="hidden">
+                <h3>Inheritance Information Package:</h3>
+                <pre id="inheritance_package_output"></pre>
+                <button id="download_inheritance_package_btn">Download as .txt</button>
+            </div>
         </section>
 
     </main>
