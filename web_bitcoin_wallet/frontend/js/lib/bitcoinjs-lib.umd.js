@@ -1,0 +1,1 @@
+Redirecting to /bitcoinjs-lib@6.1.7/dist/bitcoinjs-lib.umd.js

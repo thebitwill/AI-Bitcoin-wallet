@@ -1,0 +1,8 @@
+# Backend Dependencies
+Flask
+Flask-CORS
+requests
+
+# Frontend related (even if not directly used by pip, good to list tools)
+# Example: http-server (for serving static frontend if needed)
+# bitcoinjs-lib (will be a frontend library, not for pip)

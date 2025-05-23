@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Web Bitcoin Wallet</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <header>
+        <h1>Web Bitcoin Wallet</h1>
+        <div class="api-status">
+            <p>API Status: <span id="status-message">Fetching...</span></p>
+            <p>API Version: <span id="version-message">Fetching...</span></p>
+        </div>
+    </header>
+
+    <main>
+        <section id="wallet-actions">
+            <h2>Manage Your Wallet</h2>
+            <div class="action-group">
+                <button id="create_wallet_btn">Create New Wallet</button>
+            </div>
+            <div class="action-group">
+                <label for="mnemonic_input">Import Wallet with Mnemonic:</label>
+                <input type="text" id="mnemonic_input" placeholder="Enter your 12-word mnemonic phrase">
+                <button id="import_wallet_btn">Import Wallet</button>
+                <p id="import_error_msg" class="error-message"></p>
+            </div>
+        </section>
+
+        <section id="wallet_info_area" class="hidden">
+            <h2>Wallet Details</h2>
+            <div class="info-item">
+                <strong>Mnemonic:</strong>
+                <div id="mnemonic_display_container">
+                    <span id="mnemonic_display"></span>
+                    <button id="copy_mnemonic_btn" title="Copy Mnemonic">Copy</button>
+                </div>
+            </div>
+            <div class="info-item">
+                <strong>Address (P2PKH):</strong>
+                <div id="wallet_address_container">
+                    <span id="wallet_address"></span>
+                    <button id="copy_address_btn" title="Copy Address">Copy</button>
+                </div>
+            </div>
+            <div class="info-item">
+                <strong>Balance:</strong> <span id="wallet_balance">N/A</span>
+            </div>
+            <div class="info-item">
+                <strong>QR Code:</strong>
+                <div id="qr_code_container">
+                    <!-- QR code will be rendered here by JavaScript -->
+                </div>
+            </div>
+        </section>
+
+        <section id="send_bitcoin_area" class="hidden">
+            <h2>Send Bitcoin</h2>
+            <div class="action-group">
+                <label for="recipient_address">Recipient Address:</label>
+                <input type="text" id="recipient_address" placeholder="Enter recipient's Bitcoin address">
+            </div>
+            <div class="action-group">
+                <label for="send_amount">Amount (BTC):</label>
+                <input type="text" id="send_amount" placeholder="e.g., 0.001">
+            </div>
+            <div class="action-group">
+                <label>Network Fees:</label>
+                <div id="fee_info">Loading fees...</div>
+            </div>
+            <div class="action-group">
+                <label for="fee_rate">Fee Rate (sat/vB):</label>
+                <input type="text" id="fee_rate" placeholder="e.g., 20">
+            </div>
+            <button id="send_tx_btn">Send Transaction</button>
+            <p id="send_status_msg" class="message"></p> <!-- For status/error messages -->
+        </section>
+
+    </main>
+
+    <footer>
+        <p>Disclaimer: This wallet is for educational purposes only. Do not use with real funds on the main Bitcoin network.</p>
+    </footer>
+
+    <!-- BitcoinJS Libraries -->
+    <script src="js/lib/bip39.browser.js"></script> 
+    <script src="js/lib/bitcoinjs-lib.umd.js"></script>
+    <!-- QR Code Library -->
+    <script src="js/lib/qrcode.min.js"></script> 
+    <!-- Main application script -->
+    <script src="js/main.js"></script>
+</body>
+</html>

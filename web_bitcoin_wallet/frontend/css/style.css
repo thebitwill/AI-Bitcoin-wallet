@@ -1,0 +1,199 @@
+/* Basic styling for the Web Bitcoin Wallet */
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    margin: 0;
+    padding: 0;
+    background-color: #f8f9fa;
+    color: #343a40;
+    line-height: 1.6;
+}
+
+header {
+    background-color: #007bff;
+    color: white;
+    padding: 1rem 2rem;
+    text-align: center;
+    margin-bottom: 20px;
+}
+
+header h1 {
+    margin: 0;
+    color: white; 
+}
+
+.api-status {
+    font-size: 0.9em;
+    color: #e9ecef; 
+}
+.api-status p {
+    margin: 0.2em 0;
+}
+.api-status span {
+    font-weight: normal; 
+    color: #ffffff;
+}
+
+
+main {
+    padding: 0 2rem;
+    max-width: 800px;
+    margin: 0 auto; 
+}
+
+section {
+    background-color: #ffffff;
+    padding: 20px;
+    margin-bottom: 20px;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+h2 {
+    color: #0056b3;
+    border-bottom: 2px solid #0056b3;
+    padding-bottom: 0.5rem;
+    margin-top: 0; 
+}
+
+.action-group {
+    margin-bottom: 15px;
+}
+
+.action-group label {
+    display: block;
+    margin-bottom: 5px;
+    font-weight: bold;
+}
+
+input[type="text"] {
+    width: calc(100% - 22px); 
+    padding: 10px;
+    margin-bottom: 10px;
+    border: 1px solid #ced4da;
+    border-radius: 4px;
+    box-sizing: border-box;
+}
+
+button {
+    background-color: #007bff;
+    color: white;
+    padding: 10px 15px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 1em;
+    transition: background-color 0.2s ease-in-out;
+}
+
+button:hover {
+    background-color: #0056b3;
+}
+
+button:disabled {
+    background-color: #cccccc;
+    cursor: not-allowed;
+}
+
+
+.error-message {
+    color: #dc3545; 
+    font-size: 0.9em;
+    margin-top: 5px;
+}
+.message { /* General message styling, can be success or error */
+    font-size: 0.9em;
+    margin-top: 10px;
+    padding: 8px;
+    border-radius: 4px;
+}
+.message.error {
+    color: #721c24;
+    background-color: #f8d7da;
+    border: 1px solid #f5c6cb;
+}
+.message.success {
+    color: #155724;
+    background-color: #d4edda;
+    border: 1px solid #c3e6cb;
+}
+
+
+.hidden {
+    display: none;
+}
+
+#wallet_info_area .info-item, 
+#send_bitcoin_area .action-group { /* Consistent spacing for info items and action groups */
+    margin-bottom: 12px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid #eee; /* Light separator */
+}
+#wallet_info_area .info-item:last-child,
+#send_bitcoin_area .action-group:last-of-type { /* Remove border for last item */
+    border-bottom: none;
+    padding-bottom: 0;
+}
+
+
+#wallet_info_area strong {
+    color: #495057;
+}
+
+#mnemonic_display_container, #wallet_address_container {
+    display: flex;
+    align-items: center;
+    word-break: break-all; 
+}
+
+#mnemonic_display, #wallet_address {
+    margin-right: 10px;
+    flex-grow: 1;
+    background-color: #f8f9fa; /* Light background for readability */
+    padding: 5px;
+    border-radius: 3px;
+}
+
+#copy_mnemonic_btn, #copy_address_btn {
+    padding: 5px 10px;
+    font-size: 0.8em;
+    background-color: #28a745; 
+}
+#copy_mnemonic_btn:hover, #copy_address_btn:hover {
+    background-color: #1e7e34;
+}
+
+#qr_code_container {
+    margin-top: 10px;
+    padding: 10px;
+    background-color: #fff; /* White background for QR code */
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    display: inline-block; /* So it doesn't take full width if QR is small */
+    min-width: 138px; /* Accommodate 128px QR + padding/border */
+    min-height: 138px;
+    text-align: center; /* Center placeholder text if any */
+}
+#qr_code_container img { /* If QRCode.js generates an img tag */
+    display: block;
+    margin: auto; /* Center the QR code image */
+}
+
+
+#fee_info {
+    font-size: 0.9em;
+    color: #555;
+    background-color: #f9f9f9;
+    padding: 8px;
+    border-radius: 3px;
+    margin-bottom: 10px;
+    border: 1px solid #eee;
+}
+
+
+footer {
+    text-align: center;
+    margin-top: 30px;
+    padding: 1rem;
+    font-size: 0.8em;
+    color: #6c757d;
+}

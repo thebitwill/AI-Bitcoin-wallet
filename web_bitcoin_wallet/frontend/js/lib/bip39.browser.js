@@ -1,0 +1,1 @@
+Redirecting to /bip39@3.1.0/build/bip39.browser.js
